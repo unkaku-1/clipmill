@@ -1,6 +1,6 @@
-import type { Draft } from "immer";
+import { current, type Draft } from "immer";
 import type { AssetMeta, Clip, Group, ID, Project, TextItem } from "@/types/project";
-import { useEditor, findClip } from "@/store/editor";
+import { flushSave, useEditor, findClip } from "@/store/editor";
 import { transport } from "@/engine/transport";
 import { createClip, createGroup, createTextItem } from "@/lib/defaults";
 import { GROUP_COLORS } from "@/engine/catalog";
@@ -39,7 +39,12 @@ export function removeLibraryAssets(ids: ID[]) {
     d.audio = d.audio.filter((a) => !set.has(a.assetId));
   });
   if (inUse) toast("已从素材库和时间线移除", "info");
-  void import("@/db").then((m) => m.collectGarbage()).catch(() => undefined);
+  // Persist first: collectGarbage only sees saved projects, and an unsaved import
+  // would otherwise look unreferenced and be deleted.
+  void flushSave()
+    .then(() => import("@/db"))
+    .then((m) => m.collectGarbage())
+    .catch(() => undefined);
 }
 
 export function addGroup(name?: string) {
@@ -94,7 +99,7 @@ export function moveClip(clipId: ID, toGroupId: ID, toIndex: number) {
     const target = d.groups.find((g) => g.id === toGroupId);
     if (!clip || !target) return;
     target.clips.splice(clamp(toIndex, 0, target.clips.length), 0, clip);
-  });
+  }, { history: false });
 }
 
 export function splitClipAt(clipId: ID, t: number) {
@@ -117,7 +122,7 @@ export function splitClipAt(clipId: ID, t: number) {
     const g = d.groups.find((x) => x.id === group.id);
     if (!g) return;
     const c = g.clips[index];
-    const right = structuredClone(c);
+    const right = structuredClone(current(c));
     right.id = uid("c");
     right.duration = c.duration - local;
     right.trimIn = c.trimIn + local;
@@ -155,7 +160,7 @@ export function duplicateText(id: ID) {
   st().update((d) => {
     const i = d.texts.findIndex((t) => t.id === id);
     if (i < 0) return;
-    const copy: TextItem = structuredClone(d.texts[i]);
+    const copy: TextItem = structuredClone(current(d.texts[i]));
     copy.id = uid("t");
     copy.start += 0.5;
     d.texts.splice(i + 1, 0, copy);

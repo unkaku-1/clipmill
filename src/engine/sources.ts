@@ -2,7 +2,7 @@ import type { AssetMeta, AudioClip, ID, Project } from "@/types/project";
 import type { Drawable, FrameSources } from "@/engine/draw";
 import type { Layout, Segment } from "@/engine/timeline";
 import { getBlob } from "@/db";
-import { getBlobUrl } from "@/engine/blobs";
+import { getBlobUrl, releaseBlobUrl } from "@/engine/blobs";
 import { clamp01 } from "@/lib/util";
 
 interface ImageEntry {
@@ -293,10 +293,14 @@ export class PreviewSources implements FrameSources {
       s.el.removeAttribute("src");
       s.el.load();
     }
+    for (const [key, s] of this.videos) {
+      releaseBlobUrl(key, "orig");
+      s.el.remove();
+    }
     this.videos.clear();
-    for (const s of this.audios.values()) {
-      s.el.pause();
-      s.el.removeAttribute("src");
+    for (const [key, s] of this.audios) {
+      releaseBlobUrl(key, "orig");
+      s.el.remove();
     }
     this.audios.clear();
   }

@@ -8,7 +8,7 @@ import { transport } from "@/engine/transport";
 import { computeLayout } from "@/engine/timeline";
 import { uid } from "@/lib/util";
 
-export function styleRefs(p: Project): ID[] {
+export function styleRefs(p: Pick<Project, "style">): ID[] {
   const b = p.style.brand;
   return [b.logoAssetId, b.intro.videoAssetId, b.outro.videoAssetId].filter((x): x is ID => !!x);
 }

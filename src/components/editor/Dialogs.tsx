@@ -49,6 +49,14 @@ export function ExportDialog({ onDone }: { onDone: () => void }) {
   const hasAudio = project.audio.length > 0 || project.groups.some((g) => g.clips.some((c) => assets[c.assetId]?.kind === "video" && assets[c.assetId]?.hasAudio));
 
   useEffect(() => {
+    return () => {
+      setResult((prev) => {
+        if (prev?.url) URL.revokeObjectURL(prev.url);
+        return prev;
+      });
+    };
+  }, []);
+  useEffect(() => {
     let alive = true;
     setSupport(null);
     void detectVideoCodecs(resolution, "high").then((list) => {
@@ -77,6 +85,10 @@ export function ExportDialog({ onDone }: { onDone: () => void }) {
       toast("没有可用的视频编码器", "error");
       return;
     }
+    if (!support.find((s) => s.codec === codec)?.ok) {
+      toast("当前选择的编码器不可用，请换一个", "error");
+      return;
+    }
     let fileHandle: FileSystemFileHandle | null = null;
     if (streamDisk) {
       try {
@@ -88,7 +100,10 @@ export function ExportDialog({ onDone }: { onDone: () => void }) {
     transport.pause();
     setRunning(true);
     setExporting(true);
-    setResult(null);
+    setResult((prev) => {
+      if (prev?.url) URL.revokeObjectURL(prev.url);
+      return null;
+    });
     setProgress({ phase: "prepare", frame: 0, total: frames, fps: 0, eta: 0, bytes: 0 });
     abortRef.current = new AbortController();
     try {

@@ -101,6 +101,7 @@ export function Stage() {
   /* Render loop ------------------------------------------------------ */
   useEffect(() => {
     let raf = 0;
+    let lastPrefetch = 0;
     const draw = () => {
       const canvas = canvasRef.current;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -117,10 +118,20 @@ export function Stage() {
       if (!ctx) return;
       const scale = bh / DESIGN_H;
       scaleRef.current = scale;
+      const playing = transport.playing;
+      if (!playing && !dirtyRef.current) {
+        // Paused and clean: nothing to repaint, nothing to decode.
+        raf = requestAnimationFrame(draw);
+        return;
+      }
       const t = transport.time;
-      sources.sync(layoutRef.current, t, transport.playing, projectRef.current);
-      sources.prefetch(layoutRef.current, t, projectRef.current);
-      if (dirtyRef.current || transport.playing) {
+      sources.sync(layoutRef.current, t, playing, projectRef.current);
+      const now = performance.now();
+      if (playing ? now - lastPrefetch > 250 : now - lastPrefetch > 700) {
+        lastPrefetch = now;
+        sources.prefetch(layoutRef.current, t, projectRef.current);
+      }
+      if (dirtyRef.current || playing) {
         dirtyRef.current = false;
         ctx.setTransform(scale, 0, 0, scale, 0, 0);
         hitsRef.current = [];
@@ -200,6 +211,7 @@ export function Stage() {
             : hit.kind === "sub-top"
               ? { x: DESIGN_W / 2, y: project.style.subtitleTop.y }
               : { x: DESIGN_W / 2, y: project.style.subtitleBottom.y };
+    st.beginGesture();
     dragRef.current = { kind: hit.kind as DragKind, id: hit.id, offsetX: x - anchor.x, offsetY: y - anchor.y };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     st.select(

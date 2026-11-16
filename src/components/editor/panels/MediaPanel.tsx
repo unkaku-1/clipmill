@@ -157,10 +157,10 @@ function AssetCell({ asset, used, onAdd }: { asset: AssetMeta; used: boolean; on
       {!used && <span className="absolute top-0.5 right-0.5 rounded-sm bg-amber px-1 text-[9px] font-medium text-black">新</span>}
       <button
         className="absolute top-0.5 right-0.5 hidden rounded-sm bg-black/70 p-0.5 text-white hover:bg-danger group-hover:block"
-        title="从素材库删除（不影响已放入时间线的素材）"
+        title="从素材库和时间线删除该素材"
         onClick={(e) => {
           e.stopPropagation();
-          if (confirm(`从素材库删除「${asset.name}」？`)) removeLibraryAssets([asset.id]);
+          if (confirm(`删除「${asset.name}」？\n素材库和所有时间线中的这个素材都会被移除。`)) removeLibraryAssets([asset.id]);
         }}
       >
         <Trash2 size={10} />

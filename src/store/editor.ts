@@ -110,14 +110,22 @@ export const useEditor = create<EditorState>((set, get) => ({
     });
     if (next === cur) return;
     const history = opts.history ?? true;
+    const now = performance.now();
     let past = get().past;
+    const merge = !!opts.coalesce && !!lastCoalesce && lastCoalesce.key === opts.coalesce && now - lastCoalesce.at < 1200;
     if (history) {
-      const now = performance.now();
-      const merge = opts.coalesce && lastCoalesce && lastCoalesce.key === opts.coalesce && now - lastCoalesce.at < 1200;
       if (!merge) past = [...past, cur].slice(-HISTORY_LIMIT);
       lastCoalesce = opts.coalesce ? { key: opts.coalesce, at: now } : null;
+    } else if (opts.coalesce) {
+      // Sliders send history:false on purpose; still give each drag one undo step.
+      if (!merge) past = [...past, cur].slice(-HISTORY_LIMIT);
+      lastCoalesce = { key: opts.coalesce, at: now };
+    } else {
+      // Gesture edits (history:false) are covered by beginGesture(); end any coalescing window.
+      lastCoalesce = null;
     }
-    set({ project: next, past, future: history ? [] : get().future });
+    // Any real edit invalidates redo, whichever history mode produced it.
+    set({ project: next, past, future: [] });
   },
 
   beginGesture() {
@@ -227,6 +235,10 @@ useEditor.subscribe((s, prev) => {
 
 window.addEventListener("beforeunload", () => {
   void flushSave();
+});
+// Browsers may skip async work in beforeunload; also save when the tab is hidden.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") void flushSave();
 });
 
 /* Helpers ------------------------------------------------------------ */

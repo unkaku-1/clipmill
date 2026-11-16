@@ -5,8 +5,8 @@ import type { IntroTemplate, OutroTemplate } from "@/types/project";
 import { useEditor } from "@/store/editor";
 import { importFile } from "@/engine/importer";
 import { INTRO_TEMPLATES, OUTRO_TEMPLATES } from "@/engine/catalog";
-import { listPresets } from "@/db";
-import { saveStyleAsPreset } from "@/lib/projects";
+import { getAssets, listPresets } from "@/db";
+import { saveStyleAsPreset, styleRefs } from "@/lib/projects";
 import { useThumb } from "@/engine/blobs";
 import { Button, ColorInput, Field, NumberInput, Section, Segmented, TextArea, TextInput } from "@/components/ui/controls";
 import { Modal, toast } from "@/components/ui/feedback";
@@ -261,6 +261,15 @@ function PresetPicker() {
   const apply = async (id: string) => {
     const p = presets.find((x) => x.id === id);
     if (!p) return;
+    // The preset may reference a logo or intro/outro video that this project never imported.
+    const refs = styleRefs({ style: p.style });
+    if (refs.length) {
+      const missing = refs.filter((id) => !useEditor.getState().assets[id]);
+      if (missing.length) {
+        const found = await getAssets(missing);
+        if (found.length) useEditor.getState().addAssets(found);
+      }
+    }
     useEditor.getState().update((d) => {
       d.style = structuredClone(p.style);
     });

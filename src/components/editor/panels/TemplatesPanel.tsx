@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import clsx from "clsx";
 import { Dices, LayoutTemplate, Shuffle, Sparkles } from "lucide-react";
-import type { TextAnimSpec, TextStyle, TitleTemplate, TransitionType } from "@/types/project";
+import type { TitleTemplate, TransitionType } from "@/types/project";
 import { useEditor } from "@/store/editor";
-import { RANDOM_POOLS, TEXT_ANIMS, TEXT_PRESETS, TITLE_TEMPLATES, TRANSITIONS, transitionPool } from "@/engine/catalog";
+import { RANDOM_POOLS, TEXT_ANIMS, TITLE_TEMPLATES, TRANSITIONS, transitionPool } from "@/engine/catalog";
 import { applyTransitionToAll, randomizeMotions, randomizeTransitions } from "@/engine/automation";
-import { TextPreview } from "@/components/editor/TextPreview";
 import { Button, Field, NumberInput, Section, Segmented, Select, Toggle } from "@/components/ui/controls";
 import { toast } from "@/components/ui/feedback";
+import { FONTS } from "@/lib/fonts";
 
 export function TemplatesPanel() {
   const project = useEditor((s) => s.project)!;
@@ -144,7 +144,17 @@ export function TemplatesPanel() {
         <Field label="时长">
           <NumberInput value={project.style.title.duration} min={1} max={10} step={0.1} unit="s" slider onChange={(v) => update((d) => void (d.style.title.duration = v), { history: false, coalesce: "title-dur" })} />
         </Field>
-        <TextControls style={project.style.caption.style} kind="title" />
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="标题字号">
+            <NumberInput value={project.style.title.titleSize} min={40} max={240} step={2} slider onChange={(v) => update((d) => void (d.style.title.titleSize = v), { history: false, coalesce: "title-size" })} />
+          </Field>
+          <Field label="副标题字号">
+            <NumberInput value={project.style.title.subtitleSize} min={16} max={96} step={1} slider onChange={(v) => update((d) => void (d.style.title.subtitleSize = v), { history: false, coalesce: "title-sub-size" })} />
+          </Field>
+        </div>
+        <Field label="标题字体">
+          <Select value={project.style.title.fontId} onChange={(v) => update((d) => void (d.style.title.fontId = v))} options={FONTS.map((f) => ({ id: f.id, label: f.label }))} />
+        </Field>
       </Section>
 
       <Section title="分组小标题">
@@ -187,24 +197,3 @@ export function TemplatesPanel() {
   );
 }
 
-function TextControls({ style, kind }: { style: TextStyle; kind: "title" }) {
-  const update = useEditor((s) => s.update);
-  void kind;
-  return (
-    <div className="space-y-2 rounded-lg border border-line bg-ink-1/60 p-2">
-      <Field label="标题字号">
-        <NumberInput value={style.fontSize} min={24} max={220} step={2} slider onChange={(v) => update((d) => void (d.style.caption.style.fontSize = v), { history: false, coalesce: "cap-fs" })} />
-      </Field>
-      <Field label="文字样式">
-        <Select value={style.preset} onChange={(v) => update((d) => void (d.style.caption.style.preset = v))} options={TEXT_PRESETS.map((p) => ({ id: p.id, label: p.label }))} />
-      </Field>
-      <div className="rounded-md bg-ink-3 py-2">
-        <TextPreview text="小标题预览" style={style} anim={project2Anim()} />
-      </div>
-    </div>
-  );
-}
-
-function project2Anim(): TextAnimSpec {
-  return useEditor.getState().project?.style.caption.anim ?? { in: "slide-left", out: "fade", inDur: 0.5, outDur: 0.3 };
-}

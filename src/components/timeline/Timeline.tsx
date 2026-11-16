@@ -40,6 +40,8 @@ export function Timeline() {
   const [snapOn, setSnapOn] = useState(true);
   const [snapLine, setSnapLine] = useState<number | null>(null);
   const [dropHint, setDropHint] = useState<{ groupId: ID; index: number } | null>(null);
+  const [view, setView] = useState({ s: 0, e: 60 });
+  const gestureRef = useRef(true);
   const dropHintRef = useRef<{ groupId: ID; index: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -184,6 +186,11 @@ export function Timeline() {
   const onPointerMove = (clientX: number, clientY: number) => {
     const d = dragRef.current;
     if (!d) return;
+    if (!gestureRef.current) {
+      // Snapshot once, lazily, when the drag really starts changing the project.
+      gestureRef.current = true;
+      useEditor.getState().beginGesture();
+    }
     const t = timeFromEvent(clientX);
     if (d.kind === "playhead") {
       transport.seek(snapTime(t));
@@ -341,7 +348,7 @@ export function Timeline() {
 
   const beginDrag = (d: DragState) => {
     dragRef.current = d;
-    useEditor.getState().beginGesture();
+    gestureRef.current = d.kind === "playhead";
     const move = (ev: PointerEvent) => onPointerMove(ev.clientX, ev.clientY);
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -389,7 +396,16 @@ export function Timeline() {
       </div>
 
       {!collapsed && (
-        <div ref={scrollRef} className="relative h-[calc(100%-32px)] overflow-x-auto overflow-y-auto">
+        <div
+          ref={scrollRef}
+          className="relative h-[calc(100%-32px)] overflow-x-auto overflow-y-auto"
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const s0 = el.scrollLeft / pps;
+            const e0 = (el.scrollLeft + el.clientWidth) / pps;
+            if (Math.abs(s0 - view.s) > 1 || Math.abs(e0 - view.e) > 1) setView({ s: s0, e: e0 });
+          }}
+        >
           <div ref={innerRef} className="relative" style={{ width: contentW, minHeight: "100%" }}>
             {/* Ruler */}
             <Ruler zoom={pps} duration={duration} onSeek={(t) => {
@@ -458,6 +474,7 @@ export function Timeline() {
                     project={project}
                     assets={assets}
                     zoom={pps}
+                    view={view}
                     selection={selection}
                     dropHint={dropHint}
                     onClipDown={(e, seg) => {
@@ -591,6 +608,7 @@ interface RowProps {
   project: Project;
   assets: Record<ID, AssetMeta>;
   zoom: number;
+  view: { s: number; e: number };
   selection: { kind: string; id: string } | null;
   dropHint: { groupId: ID; index: number } | null;
   onClipDown: (e: React.PointerEvent, seg: Segment) => void;
@@ -601,7 +619,9 @@ interface RowProps {
 }
 
 function RowBars(props: RowProps) {
-  const { row, layout, project, assets, zoom, selection, dropHint } = props;
+  const { row, layout, project, assets, zoom, view, selection, dropHint } = props;
+  // Only mount bars that can be on screen; long projects stay cheap to scroll.
+  const vis = (a: number, b: number) => b >= view.s - 2 && a <= view.e + 2;
   const select = useEditor((s) => s.select);
 
   if (row.kind === "intro" || row.kind === "title") {
@@ -659,7 +679,7 @@ function RowBars(props: RowProps) {
   }
 
   if (row.kind === "group") {
-    const segs = layout.clips.filter((s) => s.group?.id === row.group!.id);
+    const segs = layout.clips.filter((s) => s.group?.id === row.group!.id && vis(s.start, s.end));
     const selectedGroup = dropHint?.groupId === row.group!.id;
     return (
       <>
@@ -692,7 +712,7 @@ function RowBars(props: RowProps) {
   if (row.kind === "text") {
     return (
       <>
-        {project.texts.map((t) => (
+        {project.texts.filter((t) => vis(t.start, t.start + t.duration)).map((t) => (
           <div
             key={t.id}
             className={clsx("absolute top-[8px] flex h-[28px] items-center overflow-hidden rounded-[4px] border px-1.5 text-[11px]", selection?.kind === "text" && selection.id === t.id ? "z-10 border-safelight bg-[#E8B44C]/25 text-paper" : "border-[#E8B44C]/40 bg-[#E8B44C]/12 text-[#E8C877] hover:border-[#E8B44C]/80")}
@@ -714,7 +734,7 @@ function RowBars(props: RowProps) {
     const cues = project.subtitles[track];
     return (
       <>
-        {cues.map((c) => (
+        {cues.filter((c) => vis(c.start, c.end)).map((c) => (
           <div
             key={c.id}
             className={clsx("absolute top-[13px] h-[18px] overflow-hidden rounded-[3px] border px-1 text-[10px] leading-4", selection?.kind === `cue-${track}` && selection.id === c.id ? "z-10 border-safelight bg-[#6FA287]/35 text-paper" : "border-[#6FA287]/40 bg-[#6FA287]/15 text-[#A9CBBB] hover:border-[#6FA287]/80")}
@@ -735,7 +755,7 @@ function RowBars(props: RowProps) {
   const outro = layout.outro;
   return (
     <>
-      {project.audio.map((a) => (
+      {project.audio.filter((a) => vis(a.start, a.start + a.duration)).map((a) => (
         <div
           key={a.id}
           className={clsx("absolute top-[6px] flex h-[32px] items-center overflow-hidden rounded-[4px] border", selection?.kind === "audio" && selection.id === a.id ? "z-10 border-safelight" : "border-[#5B8DB8]/50 hover:border-[#5B8DB8]")}

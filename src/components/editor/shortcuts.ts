@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { current } from "immer";
 import { useEditor } from "@/store/editor";
 import { transport } from "@/engine/transport";
 import { useDialogs } from "@/components/editor/dialogs";
@@ -60,7 +61,7 @@ export function useEditorShortcuts() {
             for (const g of d.groups) {
               const i = g.clips.findIndex((c) => c.id === sel.id);
               if (i >= 0) {
-                const copy = structuredClone(g.clips[i]);
+                const copy = structuredClone(current(g.clips[i]));
                 copy.id = `c_${Math.random().toString(36).slice(2, 10)}`;
                 g.clips.splice(i + 1, 0, copy);
                 break;

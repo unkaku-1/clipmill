@@ -233,20 +233,11 @@ function drawSubtitles(ctx: Ctx2D, rc: RenderContext, t: number) {
 }
 
 function findCue<T extends { start: number; end: number }>(cues: T[], t: number): T | null {
-  let lo = 0;
-  let hi = cues.length - 1;
-  let idx = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (cues[mid].start <= t) {
-      idx = mid;
-      lo = mid + 1;
-    } else hi = mid - 1;
+  // Cues can be re-timed by dragging, so they are not guaranteed to be sorted.
+  // Prefer the last-started active cue, but scan all candidates cheaply.
+  let best: T | null = null;
+  for (const c of cues) {
+    if (t >= c.start && t < c.end && (!best || c.start >= best.start)) best = c;
   }
-  // Cues may overlap slightly; check a couple of candidates.
-  for (let i = idx; i >= 0 && i >= idx - 2; i--) {
-    const c = cues[i];
-    if (t >= c.start && t < c.end) return c;
-  }
-  return null;
+  return best;
 }

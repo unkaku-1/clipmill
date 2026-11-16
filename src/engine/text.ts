@@ -44,8 +44,13 @@ export interface TextBitmap {
 /* Layout                                                              */
 /* ------------------------------------------------------------------ */
 
-const measureCanvas = new OffscreenCanvas(8, 8);
-const mctx = measureCanvas.getContext("2d")!;
+let measureCanvas: OffscreenCanvas | null = null;
+function measurer(): OffscreenCanvas { return (measureCanvas ??= new OffscreenCanvas(8, 8)); }
+type MeasureCtx = OffscreenCanvasRenderingContext2D;
+let mctx: MeasureCtx | null = null;
+function measureCtx(): MeasureCtx {
+  return (mctx ??= measurer().getContext("2d") as MeasureCtx);
+}
 
 const LATIN = /[A-Za-z0-9'’\-.,!?:;%&@#$()]/;
 
@@ -77,7 +82,7 @@ function wrap(text: string, maxWidth: number, ls: number): string[] {
     let line = "";
     for (const tok of tokenize(para)) {
       const candidate = line + tok;
-      const w = mctx.measureText(candidate).width + ls * [...candidate].length;
+      const w = measureCtx().measureText(candidate).width + ls * [...candidate].length;
       if (w > maxWidth && line.trim()) {
         out.push(line.trimEnd());
         line = tok.trimStart();
@@ -164,8 +169,8 @@ function buildBitmap(text: string, style: TextStyle, scale: number, maxWidth: nu
   const m = presetMetrics(style);
   const px = style.fontSize * scale;
   const ls = style.letterSpacing * scale;
-  mctx.font = cssFont(style.fontId, style.fontWeight, px);
-  mctx.letterSpacing = "0px";
+  measureCtx().font = cssFont(style.fontId, style.fontWeight, px);
+  measureCtx().letterSpacing = "0px";
 
   const lines = wrap(text || " ", maxWidth * scale, ls);
   const lineH = px * 1.32;
@@ -173,7 +178,7 @@ function buildBitmap(text: string, style: TextStyle, scale: number, maxWidth: nu
     const chars: { ch: string; x: number; w: number }[] = [];
     let x = 0;
     for (const ch of ln) {
-      const w = mctx.measureText(ch).width;
+      const w = measureCtx().measureText(ch).width;
       chars.push({ ch, x, w });
       x += w + ls;
     }
@@ -194,7 +199,7 @@ function buildBitmap(text: string, style: TextStyle, scale: number, maxWidth: nu
 
   const fg = new OffscreenCanvas(pw, ph);
   const g = fg.getContext("2d")!;
-  g.font = mctx.font;
+  g.font = measureCtx().font;
   g.textBaseline = "middle";
   g.textAlign = "left";
 

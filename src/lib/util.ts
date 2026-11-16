@@ -13,7 +13,11 @@ export const BLUR_MAX = 120;
 export const MIN_CLIP = 0.4;
 
 export function uid(prefix = ""): string {
-  const raw = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
+  // crypto.randomUUID() is only exposed in secure contexts; LAN HTTP still works.
+  const raw =
+    typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID().replace(/-/g, "").slice(0, 12)
+      : Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => b.toString(16).padStart(2, "0")).join("");
   return prefix ? `${prefix}_${raw}` : raw;
 }
 

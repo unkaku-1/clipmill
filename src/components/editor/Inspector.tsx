@@ -2,6 +2,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Copy, Scissors, Trash2 } from "lucide-react";
 import type { MotionType, TransitionType } from "@/types/project";
+import { current } from "immer";
 import { useEditor, useLayout, findClip } from "@/store/editor";
 import { transport } from "@/engine/transport";
 import { MOTIONS, TITLE_TEMPLATES, TRANSITIONS } from "@/engine/catalog";
@@ -120,7 +121,7 @@ function ClipInspector({ id }: { id: string }) {
             for (const g of d.groups) {
               const i = g.clips.findIndex((c) => c.id === id);
               if (i >= 0) {
-                const copy = structuredClone(g.clips[i]);
+                const copy = structuredClone(current(g.clips[i]));
                 copy.id = uid("c");
                 g.clips.splice(i + 1, 0, copy);
               }
