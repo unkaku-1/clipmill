@@ -1,0 +1,49 @@
+{
+  "name": "clipmill",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ClipMill - a browser-based video editor that auto-assembles fixed-pattern videos (intro, title, grouped photos, captions, subtitles, outro) and exports 60fps 1080p/4K MP4.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 3000 --strictPort",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "check": "tsc -p tsconfig.json && tsc -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource/bebas-neue": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/long-cang": "5.3.0",
+    "@fontsource/ma-shan-zheng": "5.3.1",
+    "@fontsource/noto-sans-sc": "5.3.1",
+    "@fontsource/noto-serif-sc": "5.3.1",
+    "@fontsource/playfair-display": "5.3.0",
+    "@fontsource/space-grotesk": "5.3.0",
+    "@fontsource/zcool-kuaile": "5.3.0",
+    "@fontsource/zcool-qingke-huangyou": "5.3.0",
+    "clsx": "2.1.1",
+    "idb": "8.0.4",
+    "immer": "11.2.10",
+    "lucide-react": "1.73.0",
+    "mediabunny": "1.66.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zustand": "5.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "@types/node": "22.20.5"
+  }
+}

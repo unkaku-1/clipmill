@@ -1,0 +1,8 @@
+services:
+  clipmill:
+    build: .
+    image: clipmill:latest
+    container_name: clipmill
+    restart: unless-stopped
+    ports:
+      - "${CLIPMILL_PORT:-8080}:80"

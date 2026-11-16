@@ -1,0 +1,14 @@
+node_modules
+dist
+*.local
+.env
+.env.*
+!.env.example
+.DS_Store
+.vite
+*.tsbuildinfo
+assets-src/
+deploy/certs/
+
+# local dev scratch (screenshots, test scripts)
+assets-src/

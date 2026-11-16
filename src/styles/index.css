@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-0: #0f0d0b;
+  --color-ink-1: #14110f;
+  --color-ink-2: #1c1815;
+  --color-ink-3: #25201c;
+  --color-ink-4: #2f2924;
+  --color-ink-5: #3d3530;
+  --color-line: #332c26;
+  --color-fog: #9c928a;
+  --color-mist: #c9c0b8;
+  --color-paper: #ece6df;
+  --color-safelight: #ff5a36;
+  --color-safelight-dim: #c8452a;
+  --color-amber: #e8b44c;
+  --color-moss: #6fa287;
+  --color-danger: #e5484d;
+
+  --font-sans: "Inter Variable", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --font-brand: "Space Grotesk", "Inter Variable", sans-serif;
+
+  --animate-rise: rise 160ms ease-out;
+  --animate-fade: fade 140ms ease-out;
+  --animate-develop: develop 2.4s linear infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes develop {
+  from {
+    background-position: 0% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-ink-1);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+input,
+textarea,
+select {
+  user-select: text;
+}
+
+::selection {
+  background: rgba(255, 90, 54, 0.35);
+}
+
+/* Scrollbars that fit the darkroom */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3d3530 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3d3530;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #554a42;
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Film sprocket edge used on the timeline and brand marks */
+.sprockets {
+  background-image: radial-gradient(circle at 50% 50%, transparent 0, transparent 100%),
+    repeating-linear-gradient(90deg, #0f0d0b 0 10px, transparent 10px 22px);
+  background-size: 22px 6px;
+  background-repeat: repeat-x;
+  background-position: 6px 50%;
+}
+
+.film-edge {
+  height: 10px;
+  background-color: #1a1613;
+  background-image: repeating-linear-gradient(90deg, transparent 0 8px, #0b0908 8px 18px, transparent 18px 26px);
+  background-size: 26px 5px;
+  background-repeat: repeat-x;
+  background-position: 0 50%;
+}
+
+/* Safelight playhead glow */
+.safelight-glow {
+  box-shadow:
+    0 0 6px rgba(255, 90, 54, 0.85),
+    0 0 18px rgba(255, 90, 54, 0.35);
+}
+
+/* Viewfinder corner marks around the preview */
+.viewfinder {
+  --c: rgba(236, 230, 223, 0.35);
+  background:
+    linear-gradient(var(--c), var(--c)) top left / 18px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top left / 1.5px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 18px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) top right / 1.5px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 18px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom left / 1.5px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 18px 1.5px no-repeat,
+    linear-gradient(var(--c), var(--c)) bottom right / 1.5px 18px no-repeat;
+}
+
+/* Export progress: developer liquid running over photo paper */
+.develop-bar {
+  background: linear-gradient(90deg, #c8452a, #ff5a36 40%, #ffb199 50%, #ff5a36 60%, #c8452a);
+  background-size: 200% 100%;
+  animation: var(--animate-develop);
+}
+
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 4px;
+  background: #3d3530;
+  outline: none;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ece6df;
+  border: 2px solid #ff5a36;
+  cursor: pointer;
+}
+
+.noise {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
