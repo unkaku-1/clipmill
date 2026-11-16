@@ -25,7 +25,7 @@ ClipMill 是一个**完全在浏览器里运行**的自动剪辑工具，专门�
 | 9 | 导出 60 帧 1080P / 4K | 基于 WebCodecs 硬件编码，H.264 / H.265 / AV1 / VP9 自动检测；可流式直接写入硬盘，4K 长片也不怕撑爆内存 |
 | 10 | .lrc / .srt 字幕、双语 | 导入 .lrc / .srt，自动识别双语并拆成「顶部 + 底部」两条轨；支持整体时间平移、样式模板 |
 | 11 | 多种模板 | 过渡 20 种、文字样式 8 套、文字动画 8 种、标题版式 4 种、片头 5 种、片尾 4 种 |
-| 12 | 开源 | MIT 协议，公开仓库，README + 一键部署脚本（Docker / GitHub Pages） |
+| 12 | 开源 | MIT 协议，公开仓库 [unkaku-1/clipmill](https://github.com/unkaku-1/clipmill)，README + 一键部署脚本（Docker / GitHub Pages） |
 
 ## 快速开始
 
@@ -61,9 +61,15 @@ pnpm build      # 产物在 dist/，可直接放到任意静态服务器
 
 需要 Node.js 22+ 和 pnpm。构建产物是纯静态文件，Nginx、Caddy、Vercel、Netlify、GitHub Pages 都能直接托管。
 
-### 方式三：GitHub Pages
+### 方式三：GitHub Pages（免服务器、自动 HTTPS）
 
-仓库自带 `.github/workflows/pages.yml`：把仓库 Settings → Pages 的 Source 设为 **GitHub Actions**，之后每次 push 到 `main` 都会自动部署到 `https://<用户名>.github.io/<仓库名>/`。
+```bash
+./deploy-pages.sh        # 构建并推送到 gh-pages 分支
+```
+
+然后到仓库 **Settings → Pages**，Source 选 **Deploy from a branch**，分支选 `gh-pages` / `(root)`。之后访问 `https://<用户名>.github.io/<仓库名>/` 即可，HTTPS 环境可以直接导出视频。
+
+如果更喜欢用 GitHub Actions，把 `docs/github-actions-pages.yml` 复制到 `.github/workflows/pages.yml`，再把 Pages 的 Source 改成 **GitHub Actions** 就行。
 
 ## 怎么用
 
