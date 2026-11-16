@@ -186,8 +186,8 @@ export function ExportDialog({ onDone }: { onDone: () => void }) {
               value={streamDisk ? "disk" : "memory"}
               onChange={(v) => setStreamDisk(v === "disk")}
               options={[
-                { id: "disk", label: "直接写入硬盘（推荐）" },
-                { id: "memory", label: "在内存中生成" },
+                { id: "disk", label: "写入硬盘" },
+                { id: "memory", label: "内存生成" },
               ]}
             />
           ) : (

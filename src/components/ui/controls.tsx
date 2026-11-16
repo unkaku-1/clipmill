@@ -279,8 +279,8 @@ export function Segmented<T extends string>({
 
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode }) {
   return (
-    <button type="button" onClick={() => onChange(!checked)} className="group inline-flex items-center gap-2 text-xs text-mist">
-      <span className={clsx("relative h-[18px] w-8 rounded-full transition-colors duration-150", checked ? "bg-safelight" : "bg-ink-5")}>
+    <button type="button" onClick={() => onChange(!checked)} className="group flex max-w-full items-start gap-2 text-left text-xs leading-[18px] text-mist">
+      <span className={clsx("relative mt-px h-[18px] w-8 shrink-0 rounded-full transition-colors duration-150", checked ? "bg-safelight" : "bg-ink-5")}>
         <span className={clsx("absolute top-[3px] h-3 w-3 rounded-full bg-paper transition-transform duration-150", checked ? "translate-x-[17px]" : "translate-x-[3px]")} />
       </span>
       {label}

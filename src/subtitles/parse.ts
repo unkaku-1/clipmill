@@ -99,9 +99,38 @@ function cue(start: number, end: number, text: string): Cue {
   return { id: uid("s"), start, end, text };
 }
 
+const CJK = /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+
+/**
+ * Bilingual LRC files often alternate lines: Chinese line, English line, …
+ * Detect that pattern and pair each two cues into one bilingual cue.
+ */
+function pairAlternating(parsed: ParsedCue[]): ParsedCue[] {
+  if (parsed.length < 4) return parsed;
+  const single = parsed.every((p) => p.lines.length === 1 && !SPLIT_INLINE.test(p.lines[0]));
+  if (!single) return parsed;
+  let flips = 0;
+  for (let i = 1; i < parsed.length; i++) {
+    if (CJK.test(parsed[i - 1].lines[0]) !== CJK.test(parsed[i].lines[0])) flips++;
+  }
+  if (flips / (parsed.length - 1) < 0.8) return parsed;
+  const out: ParsedCue[] = [];
+  for (let i = 0; i < parsed.length; i += 2) {
+    const a = parsed[i];
+    const b = parsed[i + 1];
+    if (!b) {
+      out.push(a);
+      break;
+    }
+    out.push({ start: a.start, end: Math.max(a.end, b.end), lines: [a.lines[0], b.lines[0]] });
+  }
+  return out;
+}
+
 export function distribute(parsed: ParsedCue[], target: SubtitleTarget, offset = 0): { top: Cue[]; bottom: Cue[] } {
   const top: Cue[] = [];
   const bottom: Cue[] = [];
+  if (target !== "top" && target !== "bottom") parsed = pairAlternating(parsed);
   for (const p of parsed) {
     const s = Math.max(0, p.start + offset);
     const e = Math.max(s + 0.1, p.end + offset);
@@ -129,7 +158,8 @@ export function parseSubtitleFile(name: string, text: string, fallbackEnd = 0): 
 export function looksBilingual(parsed: ParsedCue[]): boolean {
   if (!parsed.length) return false;
   const multi = parsed.filter((p) => p.lines.length >= 2 || (p.lines.length === 1 && SPLIT_INLINE.test(p.lines[0]))).length;
-  return multi / parsed.length > 0.5;
+  if (multi / parsed.length > 0.5) return true;
+  return pairAlternating(parsed).some((p) => p.lines.length > 1);
 }
 
 /* Export back to SRT (handy for users) ---------------------------- */

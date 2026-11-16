@@ -25,6 +25,7 @@ export async function openProject(id: ID): Promise<boolean> {
 /** Park the playhead on something worth looking at instead of a black first frame. */
 function seekToPreview(p: Project, assets: Record<ID, AssetMeta>) {
   const layout = computeLayout(p, assets);
+  transport.setDuration(layout.duration);
   const firstClip = layout.clips[0];
   const t = firstClip ? firstClip.cutIn + Math.min(0.6, (firstClip.cutOut - firstClip.cutIn) / 3) : layout.duration * 0.5;
   transport.pause();
