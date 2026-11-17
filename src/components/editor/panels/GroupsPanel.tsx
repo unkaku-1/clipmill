@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import clsx from "clsx";
-import { ChevronDown, FolderPlus, GripVertical, Image as ImageIcon, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { ChevronDown, FolderPlus, GripVertical, Image as ImageIcon, Sparkles, Trash2, Upload, Wand2 } from "lucide-react";
 import { useEditor } from "@/store/editor";
 import { useThumb } from "@/engine/blobs";
-import { addGroup, deleteGroup, moveClip, moveGroup, removeClips } from "@/components/editor/actions";
+import { addAssetsToGroup, addGroup, deleteGroup, moveClip, moveGroup, removeClips } from "@/components/editor/actions";
+import { ASSET_DRAG_TYPE } from "@/components/editor/dnd";
+import { addFilesToProject } from "@/lib/projects";
 import { randomizeTransitions } from "@/engine/automation";
 import { Button, IconButton } from "@/components/ui/controls";
 import { toast } from "@/components/ui/feedback";
@@ -15,6 +17,24 @@ export function GroupsPanel() {
   const selection = useEditor((s) => s.selection);
   const [open, setOpen] = useState<Set<string>>(() => new Set(project.groups.map((g) => g.id)));
   const [dragClip, setDragClip] = useState<{ groupId: string; index: number } | null>(null);
+  const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
+  const [importGroupId, setImportGroupId] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const pickFilesFor = (groupId: string) => {
+    setImportGroupId(groupId);
+    fileRef.current?.click();
+  };
+
+  const importInto = async (files: File[]) => {
+    if (!files.length) return;
+    const gid = importGroupId;
+    const name = project.groups.find((g) => g.id === gid)?.name ?? "";
+    const res = await addFilesToProject(files, { groupId: gid });
+    if (gid) setActiveGroup(gid);
+    if (res.added.length) toast(`已导入 ${res.added.length} 个素材到「${name || "当前分组"}」`, "success");
+    for (const e of res.errors) toast(e, "error", 5000);
+  };
 
   const toggle = (id: string) => {
     const s = new Set(open);
@@ -37,16 +57,29 @@ export function GroupsPanel() {
         {project.groups.map((g, gi) => (
           <div
             key={g.id}
-            className={clsx("rounded-lg border transition-colors", activeGroupId === g.id ? "border-safelight/50 bg-ink-3" : "border-line bg-ink-3/50")}
+            className={clsx(
+              "rounded-lg border transition-colors",
+              dragOverGroup === g.id ? "border-moss bg-moss/10" : activeGroupId === g.id ? "border-safelight/50 bg-ink-3" : "border-line bg-ink-3/50",
+            )}
+            onDragEnter={(e) => {
+              if (e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) setDragOverGroup(g.id);
+            }}
             onDragOver={(e) => {
-              if (e.dataTransfer.types.includes("text/clipmill-asset")) e.preventDefault();
+              if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragOverGroup((cur) => (cur === g.id ? null : cur));
             }}
             onDrop={(e) => {
-              const id = e.dataTransfer.getData("text/clipmill-asset");
-              if (id) {
-                e.preventDefault();
-                void import("@/components/editor/actions").then((m) => m.addAssetsToGroup([id], g.id));
-              }
+              setDragOverGroup(null);
+              const id = e.dataTransfer.getData(ASSET_DRAG_TYPE);
+              if (!id) return;
+              e.preventDefault();
+              addAssetsToGroup([id], g.id);
+              setActiveGroup(g.id);
+              toast(`已加入「${g.name || "未命名分组"}」`, "success");
             }}
           >
             <div className="flex items-center gap-1.5 px-2 py-1.5">
@@ -92,7 +125,9 @@ export function GroupsPanel() {
             {open.has(g.id) && (
               <div className="px-2 pb-2">
                 {g.clips.length === 0 ? (
-                  <div className="rounded border border-dashed border-line px-2 py-3 text-center text-[11px] text-fog">从素材面板拖入，或双击素材添加</div>
+                  <div className="rounded border border-dashed border-line px-2 py-3 text-center text-[11px] text-fog">
+                    {dragOverGroup === g.id ? "松手即可加入这个分组" : "从素材面板拖入，或点下方「导入素材」直接加到这个分组"}
+                  </div>
                 ) : (
                   <div className="grid grid-cols-4 gap-1">
                     {g.clips.map((c, i) => (
@@ -112,6 +147,9 @@ export function GroupsPanel() {
                   </div>
                 )}
                 <div className="mt-1.5 flex gap-1">
+                  <Button size="sm" variant="ghost" className="h-6 flex-1 text-[11px]" title="导入照片/视频并直接放到这个分组" onClick={() => pickFilesFor(g.id)}>
+                    <Upload size={11} /> 导入素材
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -147,6 +185,17 @@ export function GroupsPanel() {
           </div>
         ))}
       </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,video/*,.heic"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void importInto([...(e.target.files ?? [])]);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }

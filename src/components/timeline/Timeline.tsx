@@ -6,7 +6,8 @@ import type { Layout, Segment } from "@/engine/timeline";
 import { getLayout, useEditor, useLayout } from "@/store/editor";
 import { transport } from "@/engine/transport";
 import { useThumb } from "@/engine/blobs";
-import { moveClip, moveGroup } from "@/components/editor/actions";
+import { addAssetsToGroup, moveClip, moveGroup } from "@/components/editor/actions";
+import { ASSET_DRAG_TYPE } from "@/components/editor/dnd";
 import { clamp, formatTimecode, snapFrame } from "@/lib/util";
 import { IconButton } from "@/components/ui/controls";
 
@@ -29,7 +30,7 @@ interface SnapTargets {
   times: number[];
 }
 
-export function Timeline() {
+export function Timeline({ height, onHeightChange }: { height?: number | null; onHeightChange?: (height: number) => void }) {
   const project = useEditor((s) => s.project)!;
   const assets = useEditor((s) => s.assets);
   const layout = useLayout()!;
@@ -47,11 +48,26 @@ export function Timeline() {
   const innerRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const ppsRef = useRef(zoom);
   ppsRef.current = zoom;
 
-  const duration = Math.max(layout.duration, 8);
-  const contentW = Math.max(200, duration * zoom + 240);
+  // Guard against a non-finite duration (broken media metadata): the ruler tick
+  // loop and the content width below must stay finite, otherwise the whole page
+  // freezes while rendering the timeline.
+  const span = Number.isFinite(layout.duration) && layout.duration > 0 ? Math.max(layout.duration, 8) : 8;
+  const contentW = Math.max(200, span * zoom + 240);
+
+  // Report the rendered height so the drag handle above can start from it.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || !onHeightChange) return;
+    const report = () => onHeightChange(el.offsetHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeightChange]);
 
   /* Rows ------------------------------------------------------------ */
   const rows = useMemo(() => {
@@ -174,6 +190,41 @@ export function Timeline() {
     if (!el) return 0;
     const r = el.getBoundingClientRect();
     return Math.max(0, (clientX - r.left) / ppsRef.current);
+  };
+
+  /**
+   * Dropping a library asset (dragged from the media panel) onto a group row
+   * inserts it at the pointer position — the panels live in separate tabs, so
+   * the timeline is the shared drop surface.
+   */
+  const assetDropFor = (row: (typeof rows)[number]) => {
+    const group = row.kind === "group" ? row.group : undefined;
+    if (!group) return {};
+    return {
+      onDragOver: (e: React.DragEvent) => {
+        if (!e.dataTransfer.types.includes(ASSET_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      },
+      onDrop: (e: React.DragEvent) => {
+        const assetId = e.dataTransfer.getData(ASSET_DRAG_TYPE);
+        if (!assetId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const t = timeFromEvent(e.clientX);
+        let index = group.clips.length;
+        for (let k = 0; k < group.clips.length; k++) {
+          const seg = layout.byKey.get(group.clips[k].id);
+          if (seg && t < seg.start + (seg.end - seg.start) / 2) {
+            index = k;
+            break;
+          }
+        }
+        addAssetsToGroup([assetId], group.id, index);
+        useEditor.getState().setActiveGroup(group.id);
+        transport.pause();
+      },
+    };
   };
 
   const onPlayheadDown = (e: React.PointerEvent) => {
@@ -364,7 +415,11 @@ export function Timeline() {
   const pps = zoom;
 
   return (
-    <div className="shrink-0 border-t border-line bg-ink-2" style={{ height: collapsed ? 32 : Math.min(320, 140 + rows.length * ROW_H) }}>
+    <div
+      ref={rootRef}
+      className="shrink-0 border-t border-line bg-ink-2"
+      style={{ height: collapsed ? 32 : (height ?? Math.min(320, 140 + rows.length * ROW_H)) }}
+    >
       {/* Toolbar */}
       <div className="flex h-8 items-center gap-1 border-b border-line/70 bg-ink-1 px-2">
         <IconButton label={collapsed ? "展开时间线" : "收起时间线"} className="h-7 w-7" onClick={() => setCollapsed(!collapsed)}>
@@ -408,7 +463,7 @@ export function Timeline() {
         >
           <div ref={innerRef} className="relative" style={{ width: contentW, minHeight: "100%" }}>
             {/* Ruler */}
-            <Ruler zoom={pps} duration={duration} onSeek={(t) => {
+            <Ruler zoom={pps} duration={span} onSeek={(t) => {
               transport.pause();
               transport.seek(snapTime(t));
             }} />
@@ -422,6 +477,7 @@ export function Timeline() {
                   className={clsx("absolute left-0 flex items-stretch border-b border-line/50", i % 2 === 0 ? "bg-ink-2" : "bg-[#1e1a17]")}
                   style={{ top: y, height: ROW_H, width: contentW }}
                   data-group-row={row.kind === "group" ? row.group!.id : undefined}
+                  {...assetDropFor(row)}
                   onPointerDown={(e) => {
                     if (e.target === e.currentTarget) {
                       useEditor.getState().setActiveGroup(row.group?.id ?? null);
@@ -467,7 +523,7 @@ export function Timeline() {
             {/* Bars layer */}
             <div className="absolute top-0 left-[132px]" style={{ width: contentW - HEADER_W }}>
               {rows.map((row, i) => (
-                <div key={row.key} className="absolute inset-x-0" style={{ top: RULER_H + i * ROW_H, height: ROW_H }}>
+                <div key={row.key} className="absolute inset-x-0" style={{ top: RULER_H + i * ROW_H, height: ROW_H }} {...assetDropFor(row)}>
                   <RowBars
                     row={row}
                     layout={layout}
@@ -566,10 +622,20 @@ function RowIcon({ kind }: { kind: string }) {
 
 const Ruler = memo(function Ruler({ zoom, duration, onSeek }: { zoom: number; duration: number; onSeek: (t: number) => void }) {
   const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
-  const step = steps.find((s) => s * zoom >= 64) ?? 600;
-  const minor = step / 5;
+  // Clamp the tick count: a corrupted (non-finite) duration used to spin this
+  // loop forever, which froze the whole page. Long timelines keep full coverage
+  // by coarsening the major step instead of truncating the ruler.
+  const safe = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  let step = steps.find((s) => s * zoom >= 64) ?? 600;
+  let minor = step / 5;
+  let count = Math.ceil((safe + step) / minor) + 1;
+  while (count > 4000) {
+    step *= 2;
+    minor = step / 5;
+    count = Math.ceil((safe + step) / minor) + 1;
+  }
   const ticks: number[] = [];
-  for (let t = 0; t <= duration + step; t += minor) ticks.push(Math.round(t * 1000) / 1000);
+  for (let i = 0; i < count; i++) ticks.push(Math.round(i * minor * 1000) / 1000);
   return (
     <div className="absolute top-0 left-0 z-10 flex border-b border-line bg-ink-1" style={{ height: RULER_H, width: `calc(100% - 132px)` }}>
       <div className="sticky left-0 z-20 flex w-[132px] shrink-0 items-center border-r border-line bg-ink-3 px-2 font-mono text-[10px] text-fog">
