@@ -152,7 +152,10 @@ export function Editor() {
               onReset={() => setPane((p) => ({ ...p, right: DEFAULT_PANE_LAYOUT.right }))}
               title="拖动调整属性面板宽度 · 双击重置"
             />
-            <aside style={{ width: pane.right }} className="flex shrink-0 flex-col overflow-hidden border-l border-line bg-ink-2">
+            <aside
+              style={{ width: pane.right }}
+              className="flex shrink-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain border-l border-line bg-ink-2 [scrollbar-gutter:stable]"
+            >
               <Inspector />
             </aside>
           </>
