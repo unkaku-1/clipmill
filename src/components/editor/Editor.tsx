@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { ArrowLeft, Check, Download, Layers, LoaderCircle, Settings2, TriangleAlert, WandSparkles } from "lucide-react";
 import { useEditor, useLayout } from "@/store/editor";
@@ -10,6 +10,7 @@ import { Modal, Wordmark, toast } from "@/components/ui/feedback";
 import { Panel } from "@/components/editor/Panel";
 import { Inspector } from "@/components/editor/Inspector";
 import { Stage } from "@/components/editor/Stage";
+import { DEFAULT_PANE_LAYOUT, LEFT_MAX, LEFT_MIN, RIGHT_MAX, RIGHT_MIN, TIMELINE_MIN, Splitter, usePaneLayout } from "@/components/editor/Splitter";
 import { Timeline } from "@/components/timeline/Timeline";
 import { useDialogs } from "@/components/editor/dialogs";
 import { ExportDialog, OneClickDialog, SubtitlesDialog } from "@/components/editor/Dialogs";
@@ -28,6 +29,11 @@ export function Editor() {
   const openDialog = useDialogs((s) => s.open);
   const closeDialog = useDialogs((s) => s.close);
   const saveRef = useRef<HTMLSpanElement>(null);
+  // Resizable chrome: widths are persisted, the timeline keeps its natural
+  // height until the user drags the divider (then double click restores it).
+  const { layout: pane, setLayout: setPane } = usePaneLayout();
+  const [timelineAuto, setTimelineAuto] = useState(300);
+  const tlMax = Math.max(TIMELINE_MIN + 80, Math.round((typeof window === "undefined" ? 900 : window.innerHeight) * 0.62));
 
   const caps = useMemo(detectCapabilities, []);
   const warning = capabilityWarning(caps);
@@ -117,21 +123,54 @@ export function Editor() {
 
       {/* Main */}
       <div className="flex min-h-0 flex-1">
-        <aside className={clsx("flex shrink-0 flex-col border-r border-line bg-ink-2 transition-[width] duration-200 ease-out", panelOpen ? "w-[300px]" : "w-12")}>
+        <aside style={{ width: panelOpen ? pane.left : 48 }} className="flex shrink-0 flex-col overflow-hidden border-r border-line bg-ink-2">
           <Panel />
         </aside>
-        <main className="relative flex min-w-0 flex-1 flex-col">
+        {panelOpen && (
+          <Splitter
+            orientation="vertical"
+            value={pane.left}
+            min={LEFT_MIN}
+            max={LEFT_MAX}
+            onChange={(v) => setPane((p) => ({ ...p, left: v }))}
+            onReset={() => setPane((p) => ({ ...p, left: DEFAULT_PANE_LAYOUT.left }))}
+            title="拖动调整素材面板宽度 · 双击重置"
+          />
+        )}
+        <main className="relative flex min-w-0 flex-1 flex-col bg-ink-1">
           <Stage />
         </main>
         {panelOpen && (
-          <aside className="flex w-[308px] shrink-0 flex-col border-l border-line bg-ink-2">
-            <Inspector />
-          </aside>
+          <>
+            <Splitter
+              orientation="vertical"
+              invert
+              value={pane.right}
+              min={RIGHT_MIN}
+              max={RIGHT_MAX}
+              onChange={(v) => setPane((p) => ({ ...p, right: v }))}
+              onReset={() => setPane((p) => ({ ...p, right: DEFAULT_PANE_LAYOUT.right }))}
+              title="拖动调整属性面板宽度 · 双击重置"
+            />
+            <aside style={{ width: pane.right }} className="flex shrink-0 flex-col overflow-hidden border-l border-line bg-ink-2">
+              <Inspector />
+            </aside>
+          </>
         )}
       </div>
 
-      {/* Timeline */}
-      <Timeline />
+      {/* Timeline: drag the divider to resize, double click for the natural height */}
+      <Splitter
+        orientation="horizontal"
+        invert
+        value={pane.timeline ?? timelineAuto}
+        min={TIMELINE_MIN}
+        max={tlMax}
+        onChange={(v) => setPane((p) => ({ ...p, timeline: v }))}
+        onReset={() => setPane((p) => ({ ...p, timeline: null }))}
+        title="拖动调整时间线高度 · 双击回到自适应"
+      />
+      <Timeline height={pane.timeline} onHeightChange={setTimelineAuto} />
 
       {/* Dialogs */}
       <Modal open={dialog === "export"} onClose={() => !exporting && closeDialog()} title="导出视频" width={560} dismissable={!exporting}>

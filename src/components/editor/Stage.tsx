@@ -101,7 +101,22 @@ export function Stage() {
   /* Render loop ------------------------------------------------------ */
   useEffect(() => {
     let raf = 0;
+    let disposed = false;
     let lastPrefetch = 0;
+    let reportedError = false;
+
+    const reportRenderError = (err: unknown) => {
+      if (!reportedError) {
+        reportedError = true;
+        console.error("[ClipMill] 预览渲染失败", err);
+      }
+      // A broken project/asset must never take the preview loop down with it:
+      // stop the clock so the bad frame is not retried every frame, and leave the
+      // rAF chain alive so the next edit can repaint (and the page stays usable).
+      transport.setNotice("预览渲染出错，已暂停播放");
+      if (transport.playing) transport.pause();
+    };
+
     const draw = () => {
       const canvas = canvasRef.current;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -115,16 +130,17 @@ export function Stage() {
         dirtyRef.current = true;
       }
       const ctx = canvas?.getContext("2d", { alpha: false });
+      // A detached/not-yet-mounted canvas is not fatal: keep the loop alive.
       if (!ctx) return;
       const scale = bh / DESIGN_H;
       scaleRef.current = scale;
       const playing = transport.playing;
       if (!playing && !dirtyRef.current) {
         // Paused and clean: nothing to repaint, nothing to decode.
-        raf = requestAnimationFrame(draw);
         return;
       }
-      const t = transport.time;
+      // The clock itself is guarded, but never hand a non-finite time to the renderer.
+      const t = Number.isFinite(transport.time) ? transport.time : 0;
       sources.sync(layoutRef.current, t, playing, projectRef.current);
       const now = performance.now();
       if (playing ? now - lastPrefetch > 250 : now - lastPrefetch > 700) {
@@ -145,15 +161,26 @@ export function Stage() {
           scratch: scratch,
         };
         renderFrame(ctx, rc, t);
+        reportedError = false;
         setHits((prev) => (sameHits(prev, hitsRef.current) ? prev : hitsRef.current.slice()));
       }
     };
+    // One and only one rAF chain: `tick` is the sole scheduler, so React
+    // StrictMode double-mounts and dependency changes cannot stack loops.
     const tick = () => {
-      draw();
-      raf = requestAnimationFrame(tick);
+      if (disposed) return;
+      try {
+        draw();
+      } catch (err) {
+        reportRenderError(err);
+      }
+      if (!disposed) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(raf);
+    };
   }, [box.w, box.h, sources]);
 
   useEffect(() => () => sources.dispose(), [sources]);
@@ -358,6 +385,15 @@ const LABEL: Record<HitBox["kind"], string> = {
 function TransportBar({ playing, loop, setLoop }: { playing: boolean; loop: boolean; setLoop: (v: boolean) => void }) {
   const timeRef = useRef<HTMLSpanElement>(null);
   const total = useLayout()?.duration ?? 0;
+  // A project without material (or with a corrupt duration) has nothing to play.
+  const playable = Number.isFinite(total) && total > 0;
+  const [notice, setNotice] = useState<string | null>(transport.notice);
+  useEffect(() => {
+    const un = transport.onState(() => setNotice(transport.notice));
+    return () => {
+      un();
+    };
+  }, []);
   useEffect(() => {
     const un = transport.onTime((t) => {
       if (timeRef.current) timeRef.current.textContent = formatTimecode(t);
@@ -376,8 +412,12 @@ function TransportBar({ playing, loop, setLoop }: { playing: boolean; loop: bool
       </IconButton>
       <button
         onClick={() => transport.toggle()}
-        className="mx-1 flex h-9 w-9 items-center justify-center rounded-full bg-safelight text-white shadow-[0_0_18px_-4px_rgba(255,90,54,.8)] transition-transform hover:scale-105"
-        title="播放 / 暂停 (空格)"
+        disabled={!playable}
+        className={clsx(
+          "mx-1 flex h-9 w-9 items-center justify-center rounded-full bg-safelight text-white shadow-[0_0_18px_-4px_rgba(255,90,54,.8)] transition-transform",
+          playable ? "hover:scale-105" : "cursor-not-allowed opacity-40 shadow-none hover:scale-100",
+        )}
+        title={playable ? "播放 / 暂停 (空格)" : "先添加素材再预览"}
       >
         {playing ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" className="ml-0.5" />}
       </button>
@@ -396,7 +436,11 @@ function TransportBar({ playing, loop, setLoop }: { playing: boolean; loop: bool
         <span className="text-fog">{formatTimecode(total)}</span>
       </div>
       <div className="flex-1" />
-      <span className="text-[11px] text-fog">在画面上直接拖动 Logo、小标题和字幕</span>
+      {notice ? (
+        <span className="text-[11px] text-amber">{notice}</span>
+      ) : (
+        <span className="text-[11px] text-fog">{playable ? "在画面上直接拖动 Logo、小标题和字幕" : "先添加素材再预览"}</span>
+      )}
       <IconButton label="全屏预览" onClick={() => void (canvasFullscreen())}>
         <Maximize2 size={15} />
       </IconButton>

@@ -10,19 +10,25 @@ import { computeLayout } from "@/engine/timeline";
 
 const st = () => useEditor.getState();
 
-export function addAssetsToGroup(assetIds: ID[], groupId?: ID | null) {
+export function addAssetsToGroup(assetIds: ID[], groupId?: ID | null, index?: number) {
   const { assets } = st();
   st().update((d) => {
-    let group = d.groups.find((g) => g.id === (groupId ?? st().activeGroupId)) ?? d.groups[d.groups.length - 1];
+    const wanted = groupId ?? st().activeGroupId;
+    let group = d.groups.find((g) => g.id === wanted) ?? d.groups[d.groups.length - 1];
     if (!group) {
       const g = createGroup("第一组", d.groups.length);
       d.groups.push(g);
       group = d.groups[d.groups.length - 1];
     }
+    // Insert at the requested slot (dropping onto a timeline row) or append.
+    let at = index == null ? Number.POSITIVE_INFINITY : Math.max(0, index);
     for (const id of assetIds) {
       const a = assets[id];
       if (!a || a.kind === "audio") continue;
-      group.clips.push(createClip(a, d.style as Project["style"]));
+      const clip = createClip(a, d.style as Project["style"]);
+      const pos = Number.isFinite(at) ? Math.min(group.clips.length, at) : group.clips.length;
+      group.clips.splice(pos, 0, clip);
+      if (Number.isFinite(at)) at = pos + 1;
     }
   });
 }

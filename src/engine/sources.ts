@@ -30,6 +30,14 @@ const PREFETCH_BEHIND = 1.5;
 const PREFETCH_AHEAD = 7;
 
 /**
+ * Media elements throw DOMException when `currentTime`/`volume` are set to
+ * NaN/Infinity, and the timeline can carry corrupt values (a project saved with
+ * a broken duration, a video without metadata). "The latest assignments to the
+ * media element's properties" must always be finite numbers. */
+const finiteOr = (value: number, fallback = 0) => (Number.isFinite(value) ? value : fallback);
+const safeVolume = (value: number) => (Number.isFinite(value) ? clamp01(value) : 0);
+
+/**
  * Preview implementation of FrameSources.
  *
  * Only low-resolution proxies near the playhead are decoded (LRU bounded),
@@ -121,10 +129,12 @@ export class PreviewSources implements FrameSources {
 
   /** Warm the cache for shots around time t, so scrubbing and playback never wait. */
   prefetch(layout: Layout, t: number, project: Project) {
+    if (!Number.isFinite(t)) return;
     const logo = project.style.brand.logoAssetId;
     if (logo) this.image(logo);
     if (layout.firstAssetId) this.blur(layout.firstAssetId);
     for (const s of layout.segments) {
+      if (!Number.isFinite(s.start) || !Number.isFinite(s.end)) continue;
       if (s.end < t - PREFETCH_BEHIND || s.start > t + PREFETCH_AHEAD) continue;
       if (!s.assetId) continue;
       const a = this.assets[s.assetId];
@@ -172,21 +182,23 @@ export class PreviewSources implements FrameSources {
    */
   sync(layout: Layout, t: number, playing: boolean, project: Project) {
     this.playing = playing;
+    const time = finiteOr(t);
     const active = new Set<string>();
 
     for (const s of layout.segments) {
+      if (!Number.isFinite(s.start) || !Number.isFinite(s.end)) continue;
       if (!s.assetId) continue;
       const a = this.assets[s.assetId];
       if (!a || a.kind !== "video") continue;
       const preroll = playing ? 1.2 : 0;
-      if (t < s.start - preroll || t >= s.end) continue;
+      if (time < s.start - preroll || time >= s.end) continue;
       active.add(s.key);
-      this.syncVideo(s, a, t, playing);
+      this.syncVideo(s, a, time, playing);
     }
     for (const [key, slot] of this.videos) {
       if (!active.has(key) && !slot.el.paused) slot.el.pause();
     }
-    this.syncAudio(project.audio, t, playing);
+    this.syncAudio(project.audio, time, playing);
   }
 
   private syncVideo(s: Segment, a: AssetMeta, t: number, playing: boolean) {
@@ -199,14 +211,16 @@ export class PreviewSources implements FrameSources {
     const el = slot.el;
     if (!el.src) return;
     slot.lastUse = ++this.clock;
-    const trimIn = s.clip?.trimIn ?? 0;
+    const trimIn = finiteOr(s.clip?.trimIn ?? 0);
     const local = t - s.start;
-    const target = Math.min(Math.max(0, trimIn + Math.max(0, local)), Math.max(0, (a.duration || 0) - 0.05));
-    const volume = s.clip ? (s.clip.muted ? 0 : s.clip.volume) : 1;
+    // A corrupt/unknown duration must yield a finite target, never NaN/Infinity.
+    const assetDur = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 0;
+    const target = Math.min(Math.max(0, trimIn + Math.max(0, finiteOr(local))), Math.max(0, assetDur - 0.05));
+    const volume = s.clip ? (s.clip.muted ? 0 : finiteOr(s.clip.volume, 1)) : 1;
 
     if (playing && local >= 0) {
       el.muted = volume <= 0 || !a.hasAudio;
-      el.volume = clamp01(volume);
+      el.volume = safeVolume(volume);
       if (el.paused) {
         if (Math.abs(el.currentTime - target) > 0.05) el.currentTime = target;
         void el.play().catch(() => undefined);
@@ -221,11 +235,14 @@ export class PreviewSources implements FrameSources {
   }
 
   private syncAudio(clips: AudioClip[], t: number, playing: boolean) {
+    const time = finiteOr(t);
     const live = new Set<ID>();
     for (const c of clips) {
       live.add(c.id);
       let slot = this.audios.get(c.id);
-      const inRange = t >= c.start && t < c.start + c.duration;
+      const start = finiteOr(c.start);
+      const dur = Number.isFinite(c.duration) && c.duration > 0 ? c.duration : 0;
+      const inRange = time >= start && time < start + dur;
       if (!slot) {
         if (!playing || !inRange) continue;
         const el = new Audio();
@@ -239,11 +256,11 @@ export class PreviewSources implements FrameSources {
       const el = slot.el;
       if (!el.src) continue;
       if (playing && inRange) {
-        const local = t - c.start;
-        const target = c.trimIn + local;
+        const local = time - start;
+        const target = Math.max(0, finiteOr(c.trimIn) + local);
         const fin = c.fadeIn > 0 ? clamp01(local / c.fadeIn) : 1;
-        const fout = c.fadeOut > 0 ? clamp01((c.duration - local) / c.fadeOut) : 1;
-        el.volume = clamp01(c.volume * Math.min(fin, fout));
+        const fout = c.fadeOut > 0 ? clamp01((dur - local) / c.fadeOut) : 1;
+        el.volume = safeVolume(finiteOr(c.volume, 1) * Math.min(fin, fout));
         if (el.paused) {
           el.currentTime = target;
           void el.play().catch(() => undefined);
