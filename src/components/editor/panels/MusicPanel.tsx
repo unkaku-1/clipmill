@@ -6,7 +6,8 @@ import { fitImagesToDuration, musicEnd, setAllImageDurations } from "@/engine/au
 import { computeLayout } from "@/engine/timeline";
 import { Button, NumberInput } from "@/components/ui/controls";
 import { toast } from "@/components/ui/feedback";
-import { formatDuration, uid } from "@/lib/util";
+import { formatDuration, formatTimecode, uid } from "@/lib/util";
+import { musicFadeEnd } from "@/engine/music";
 
 export function MusicPanel() {
   const project = useEditor((s) => s.project)!;
@@ -17,6 +18,8 @@ export function MusicPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const end = musicEnd(project);
+  const fadeEnd = musicFadeEnd(layout);
+  const musicBeyondVideo = end > fadeEnd + 0.05;
 
   const importMusic = async (files: File[]) => {
     if (!files.length) return;
@@ -86,6 +89,12 @@ export function MusicPanel() {
           <span className="text-fog">视频 {formatDuration(layout.duration)}</span>
           <span className="text-fog">音乐 {end ? formatDuration(end) : "—"}</span>
         </div>
+        {musicBeyondVideo && (
+          <div className="rounded-md border border-[#5B8DB8]/40 bg-[#5B8DB8]/10 px-2 py-1.5 text-[11px] leading-relaxed text-[#A9C4DE]">
+            音乐比视频长：将在{layout.outro ? "片尾开始前" : "视频结尾"} <span className="font-mono text-paper">{formatTimecode(fadeEnd)}</span> 完成淡出，
+            {layout.outro ? "片尾内保持静音。" : "到达结尾时刚好静音。"}
+          </div>
+        )}
         <Button variant="primary" className="w-full" onClick={fitToMusic}>
           <Timer size={14} /> 适配音乐时长（自动均分图片）
         </Button>

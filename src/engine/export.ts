@@ -20,6 +20,7 @@ import {
 import type { AssetMeta, ID, Project } from "@/types/project";
 import type { Drawable, FrameSources, RenderContext } from "@/engine/draw";
 import { activeSegments, computeLayout, type Layout, type Segment } from "@/engine/timeline";
+import { musicFadeEnd, musicWindow } from "@/engine/music";
 import { renderFrame } from "@/engine/render";
 import { clearTextCache } from "@/engine/text";
 import { loadOriginal } from "@/engine/sources";
@@ -333,7 +334,14 @@ async function mixAudio(project: Project, layout: Layout, assets: Record<ID, Ass
     if (s.clip && (s.clip.muted || s.clip.volume <= 0)) return false;
     return s.end > t0 && s.start < t1;
   });
-  const music = project.audio.filter((c) => assets[c.assetId] && c.start < t1 && c.start + c.duration > t0);
+  // The music fades out on the frame before the outro (see engine/music.ts), so
+  // a track longer than the video is never cut off mid-note.
+  const fadeEnd = musicFadeEnd(layout);
+  const music = project.audio.filter((c) => {
+    if (!assets[c.assetId]) return false;
+    const w = musicWindow(c, fadeEnd);
+    return w.end > w.start && w.start < t1 && w.end > t0;
+  });
   if (!music.length && !videoSegs.length) return null;
 
   const length = Math.max(1, Math.ceil((t1 - t0) * SAMPLE_RATE));
@@ -345,17 +353,19 @@ async function mixAudio(project: Project, layout: Layout, assets: Record<ID, Ass
     const src = ctx.createBufferSource();
     src.buffer = buf;
     const g = ctx.createGain();
-    const s = c.start - t0;
-    const e = s + c.duration;
+    const w = musicWindow(c, fadeEnd);
+    const s = w.start - t0;
+    const e = w.end - t0;
+    const playDur = w.end - w.start;
     g.gain.setValueAtTime(c.fadeIn > 0 ? 0 : c.volume, Math.max(0, s));
     if (c.fadeIn > 0) g.gain.linearRampToValueAtTime(c.volume, Math.max(0, s + c.fadeIn));
     if (c.fadeOut > 0) {
-      g.gain.setValueAtTime(c.volume, Math.max(0, e - c.fadeOut));
+      g.gain.setValueAtTime(c.volume, Math.max(0, w.fadeStart - t0));
       g.gain.linearRampToValueAtTime(0, Math.max(0, e));
     }
     src.connect(g).connect(ctx.destination);
-    if (s >= 0) src.start(s, c.trimIn, c.duration);
-    else src.start(0, c.trimIn - s, c.duration + s);
+    if (s >= 0) src.start(s, c.trimIn, playDur);
+    else src.start(0, c.trimIn - s, playDur + s);
   }
 
   for (const seg of videoSegs) {

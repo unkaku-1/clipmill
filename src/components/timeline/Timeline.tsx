@@ -8,6 +8,7 @@ import { transport } from "@/engine/transport";
 import { useThumb } from "@/engine/blobs";
 import { addAssetsToGroup, moveClip, moveGroup } from "@/components/editor/actions";
 import { ASSET_DRAG_TYPE } from "@/components/editor/dnd";
+import { musicFadeEnd, musicWindow } from "@/engine/music";
 import { clamp, formatTimecode, snapFrame } from "@/lib/util";
 import { IconButton } from "@/components/ui/controls";
 
@@ -819,22 +820,46 @@ function RowBars(props: RowProps) {
 
   // Audio + outro row
   const outro = layout.outro;
+  // Music must already be silent when the outro starts (engine/music.ts); the bar
+  // keeps its real length (so the handles still work) but dims the unheard tail.
+  const musicFade = musicFadeEnd(layout);
   return (
     <>
-      {project.audio.filter((a) => vis(a.start, a.start + a.duration)).map((a) => (
-        <div
-          key={a.id}
-          className={clsx("absolute top-[6px] flex h-[32px] items-center overflow-hidden rounded-[4px] border", selection?.kind === "audio" && selection.id === a.id ? "z-10 border-safelight" : "border-[#5B8DB8]/50 hover:border-[#5B8DB8]")}
-          style={{ left: a.start * zoom, width: Math.max(8, a.duration * zoom), background: "#5B8DB822" }}
-          onPointerDown={(e) => props.onAudioDown(e, a, "move")}
-          title={assets[a.assetId]?.name}
-        >
-          <Waveform assetId={a.assetId} width={Math.max(8, a.duration * zoom)} />
-          <span className="relative z-10 truncate px-1.5 text-[10px] text-[#A9C4DE]">{assets[a.assetId]?.name}</span>
-          <div className="absolute top-0 bottom-0 left-0 w-[5px] cursor-ew-resize" onPointerDown={(e) => props.onAudioDown(e, a, "start")} />
-          <div className="absolute top-0 right-0 bottom-0 w-[5px] cursor-ew-resize" onPointerDown={(e) => props.onAudioDown(e, a, "end")} />
-        </div>
-      ))}
+      {project.audio.filter((a) => vis(a.start, a.start + a.duration)).map((a) => {
+        const w = musicWindow(a, musicFade);
+        const tail = Math.max(0, a.start + a.duration - w.end);
+        const fadeLen = Math.max(0, w.end - w.fadeStart);
+        return (
+          <div
+            key={a.id}
+            className={clsx("absolute top-[6px] flex h-[32px] items-center overflow-hidden rounded-[4px] border", selection?.kind === "audio" && selection.id === a.id ? "z-10 border-safelight" : "border-[#5B8DB8]/50 hover:border-[#5B8DB8]")}
+            style={{ left: a.start * zoom, width: Math.max(8, a.duration * zoom), background: "#5B8DB822" }}
+            onPointerDown={(e) => props.onAudioDown(e, a, "move")}
+            title={`${assets[a.assetId]?.name ?? ""}${tail > 0.05 ? ` · 片尾前 ${formatTimecode(w.end)} 完成淡出` : ""}`}
+          >
+            <Waveform assetId={a.assetId} width={Math.max(8, a.duration * zoom)} />
+            <span className="relative z-10 truncate px-1.5 text-[10px] text-[#A9C4DE]">{assets[a.assetId]?.name}</span>
+            {fadeLen > 0.05 && (
+              <div
+                className="pointer-events-none absolute inset-y-0"
+                style={{
+                  left: (w.fadeStart - a.start) * zoom,
+                  width: fadeLen * zoom,
+                  background: "linear-gradient(to right, rgba(91,141,184,0) 0%, rgba(91,141,184,0.55) 100%)",
+                }}
+              />
+            )}
+            {tail > 0.05 && (
+              <>
+                <div className="pointer-events-none absolute inset-y-0 right-0 bg-ink-1/70" style={{ width: tail * zoom }} />
+                <div className="pointer-events-none absolute inset-y-0 w-[1px] bg-[#5B8DB8]" style={{ left: (w.end - a.start) * zoom }} />
+              </>
+            )}
+            <div className="absolute top-0 bottom-0 left-0 w-[5px] cursor-ew-resize" onPointerDown={(e) => props.onAudioDown(e, a, "start")} />
+            <div className="absolute top-0 right-0 bottom-0 w-[5px] cursor-ew-resize" onPointerDown={(e) => props.onAudioDown(e, a, "end")} />
+          </div>
+        );
+      })}
       {outro && (
         <button
           className={clsx("absolute top-[7px] h-[30px] rounded-md border px-2 text-left text-[11px]", selection?.kind === "outro" ? "border-safelight bg-safelight/20 text-paper" : "border-ink-5 bg-ink-4 text-mist hover:border-fog")}
