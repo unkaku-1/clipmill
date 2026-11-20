@@ -3,6 +3,7 @@ import type { Drawable, FrameSources } from "@/engine/draw";
 import type { Layout, Segment } from "@/engine/timeline";
 import { getBlob } from "@/db";
 import { getBlobUrl, releaseBlobUrl } from "@/engine/blobs";
+import { musicFadeEnd, musicGain, musicWindow } from "@/engine/music";
 import { clamp01 } from "@/lib/util";
 
 interface ImageEntry {
@@ -198,7 +199,7 @@ export class PreviewSources implements FrameSources {
     for (const [key, slot] of this.videos) {
       if (!active.has(key) && !slot.el.paused) slot.el.pause();
     }
-    this.syncAudio(project.audio, time, playing);
+    this.syncAudio(project.audio, time, playing, musicFadeEnd(layout));
   }
 
   private syncVideo(s: Segment, a: AssetMeta, t: number, playing: boolean) {
@@ -234,15 +235,14 @@ export class PreviewSources implements FrameSources {
     }
   }
 
-  private syncAudio(clips: AudioClip[], t: number, playing: boolean) {
+  private syncAudio(clips: AudioClip[], t: number, playing: boolean, fadeEnd: number) {
     const time = finiteOr(t);
     const live = new Set<ID>();
     for (const c of clips) {
       live.add(c.id);
+      const { start, end } = musicWindow(c, fadeEnd);
+      const inRange = end > start && time >= start && time < end;
       let slot = this.audios.get(c.id);
-      const start = finiteOr(c.start);
-      const dur = Number.isFinite(c.duration) && c.duration > 0 ? c.duration : 0;
-      const inRange = time >= start && time < start + dur;
       if (!slot) {
         if (!playing || !inRange) continue;
         const el = new Audio();
@@ -258,9 +258,9 @@ export class PreviewSources implements FrameSources {
       if (playing && inRange) {
         const local = time - start;
         const target = Math.max(0, finiteOr(c.trimIn) + local);
-        const fin = c.fadeIn > 0 ? clamp01(local / c.fadeIn) : 1;
-        const fout = c.fadeOut > 0 ? clamp01((dur - local) / c.fadeOut) : 1;
-        el.volume = safeVolume(finiteOr(c.volume, 1) * Math.min(fin, fout));
+        // The gain rule is shared with the exporter: it reaches 0 exactly at the
+        // fade-out deadline (the first frame of the outro), never after it.
+        el.volume = safeVolume(musicGain(c, time, fadeEnd));
         if (el.paused) {
           el.currentTime = target;
           void el.play().catch(() => undefined);
